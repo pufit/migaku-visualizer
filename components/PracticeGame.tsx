@@ -41,9 +41,15 @@ export function PracticeGame({ words, waniKaniData }: PracticeGameProps) {
 
     // Setup game
     const startGame = () => {
-        const filteredWords = words.filter(w => w.knownStatus === category);
+        let filteredWords = words.filter(w => w.knownStatus === category);
+
+        // Filter out non-kanji words if setting is 'with-kanji'
+        if (kanjiSetting === 'with-kanji') {
+            filteredWords = filteredWords.filter(w => /[\u4e00-\u9faf]/.test(w.dictForm));
+        }
+
         if (filteredWords.length === 0) {
-            alert(`No words found for category: ${category}`);
+            alert(`No words found for category: ${category} with current settings`);
             return;
         }
 

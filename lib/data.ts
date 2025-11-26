@@ -34,15 +34,19 @@ export async function getWordList(): Promise<WordListData | null> {
             const data = await redis.get('wordlist');
             await redis.quit();
             if (data) {
-                return typeof data === 'string' ? JSON.parse(data) : data;
+                const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+                return Array.isArray(parsed) ? { words: parsed } : parsed;
             }
             return null;
         }
 
         // 2. Vercel KV
         if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-            const data = await kv.get<WordListData>('wordlist');
-            return data;
+            const data = await kv.get<WordListData | Word[]>('wordlist');
+            if (Array.isArray(data)) {
+                return { words: data };
+            }
+            return data as WordListData;
         }
 
         // 3. Filesystem
@@ -51,7 +55,8 @@ export async function getWordList(): Promise<WordListData | null> {
             return null;
         }
         const fileContent = fs.readFileSync(filePath, 'utf-8');
-        return JSON.parse(fileContent);
+        const parsed = JSON.parse(fileContent);
+        return Array.isArray(parsed) ? { words: parsed } : parsed;
     } catch (error) {
         console.error('Error reading wordlist:', error);
         return null;
