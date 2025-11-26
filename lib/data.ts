@@ -23,7 +23,14 @@ export async function getWordList(): Promise<WordListData | null> {
     try {
         // 1. Generic Redis
         if (process.env.REDIS_URL) {
-            const redis = new Redis(process.env.REDIS_URL);
+            const url = new URL(process.env.REDIS_URL);
+            const redis = new Redis({
+                host: url.hostname,
+                port: parseInt(url.port || '6379'),
+                username: url.username,
+                password: url.password,
+                tls: url.protocol === 'rediss:' ? {} : undefined,
+            });
             const data = await redis.get('wordlist');
             await redis.quit();
             if (data) {
