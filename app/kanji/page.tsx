@@ -1,5 +1,6 @@
 import { getWordList } from '@/lib/data';
 import { getWaniKaniData } from '@/lib/wanikani';
+import { getJlptData } from '@/lib/jlpt';
 import { KanjiFilter } from '@/components/KanjiFilter';
 
 type WordStatus = "KNOWN" | "LEARNING" | "UNKNOWN" | "IGNORED";
@@ -20,8 +21,9 @@ export default async function KanjiPage() {
         );
     }
 
-    // Load WaniKani data
+    // Load WaniKani and JLPT data
     const waniKaniData = getWaniKaniData();
+    const jlptData = getJlptData();
 
     // Group kanji by word status
     const kanjiByStatus: Record<WordStatus, Map<string, string[]>> = {
@@ -51,7 +53,7 @@ export default async function KanjiPage() {
     });
 
     // Convert maps to sorted arrays with WaniKani info
-    const kanjiData: Record<WordStatus, Array<{ kanji: string; words: string[]; waniKaniInfo?: any }>> = {
+    const kanjiData: Record<WordStatus, Array<{ kanji: string; words: string[]; waniKaniInfo?: any; jlptInfo?: any }>> = {
         KNOWN: [],
         LEARNING: [],
         UNKNOWN: [],
@@ -63,7 +65,8 @@ export default async function KanjiPage() {
             .map(([kanji, words]) => ({
                 kanji,
                 words,
-                waniKaniInfo: waniKaniData.get(kanji)
+                waniKaniInfo: waniKaniData.get(kanji),
+                jlptInfo: jlptData.get(kanji)
             }))
             .sort((a, b) => b.words.length - a.words.length);
     });

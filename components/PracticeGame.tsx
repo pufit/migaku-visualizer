@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Word } from '@/lib/data';
 import type { WaniKaniKanji } from '@/lib/wanikani';
+import { DictionaryBlock } from './DictionaryBlock';
+import { DictionaryPopup } from './DictionaryPopup';
 
 type GameState = 'setup' | 'playing' | 'results';
 type GameMode = 'standard' | 'fast-typing';
@@ -30,6 +32,8 @@ export function PracticeGame({ words, waniKaniData }: PracticeGameProps) {
     const [showAnswer, setShowAnswer] = useState(false);
     const [mistakenWords, setMistakenWords] = useState<Set<Word>>(new Set());
     const [gameWords, setGameWords] = useState<Word[]>([]);
+    const [selectedWord, setSelectedWord] = useState<string | null>(null);
+    const [correctlyAnsweredWords, setCorrectlyAnsweredWords] = useState<Set<Word>>(new Set());
     const inputRef = useRef<HTMLInputElement>(null);
 
     // Helper to determine if we should show kanji for the next word
@@ -62,6 +66,7 @@ export function PracticeGame({ words, waniKaniData }: PracticeGameProps) {
         setScore(0);
         setMistakes(0);
         setMistakenWords(new Set());
+        setCorrectlyAnsweredWords(new Set());
         setUserInput("");
         setShowAnswer(false);
         setGameState('playing');
@@ -110,6 +115,11 @@ export function PracticeGame({ words, waniKaniData }: PracticeGameProps) {
 
         if (cleanInput === cleanAnswer || cleanInput === cleanDictForm) {
             setScore(s => s + 1);
+            setCorrectlyAnsweredWords(prev => {
+                const newSet = new Set(prev);
+                newSet.add(currentWord);
+                return newSet;
+            });
             nextWord();
         } else {
             setMistakes(m => m + 1);
@@ -243,6 +253,7 @@ export function PracticeGame({ words, waniKaniData }: PracticeGameProps) {
     if (gameState === 'results') {
         const wpm = Math.round((score / duration) * 60);
         const accuracy = Math.round((score / (score + mistakes)) * 100) || 0;
+        const correctWords = Array.from(correctlyAnsweredWords);
 
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] gap-8 w-full max-w-4xl mx-auto p-4">
@@ -282,6 +293,9 @@ export function PracticeGame({ words, waniKaniData }: PracticeGameProps) {
                                     </div>
 
                                     <div className="space-y-6">
+                                        {/* Dictionary Block */}
+                                        <DictionaryBlock word={word.dictForm} />
+
                                         {getKanjiInfo(word).map(({ char, info }) => (
                                             <div key={char} className="grid md:grid-cols-12 gap-6">
                                                 <div className="md:col-span-1 flex justify-center md:justify-start">
@@ -317,12 +331,38 @@ export function PracticeGame({ words, waniKaniData }: PracticeGameProps) {
                     </div>
                 )}
 
+                {correctWords.length > 0 && (
+                    <div className="w-full mt-8">
+                        <h3 className="text-xl font-bold mb-6 text-center text-green-600">Correct Answers</h3>
+                        <div className="flex flex-wrap justify-center gap-3">
+                            {correctWords.map((word, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => setSelectedWord(word.dictForm)}
+                                    className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm hover:shadow-md hover:border-blue-300 transition-all flex items-baseline gap-2"
+                                >
+                                    <span className="font-bold text-lg">{word.dictForm}</span>
+                                    <span className="text-sm text-gray-500">{word.secondary}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 <button
                     onClick={() => setGameState('setup')}
                     className="w-full max-w-md py-4 bg-gray-900 dark:bg-gray-700 hover:bg-gray-800 dark:hover:bg-gray-600 text-white rounded-xl font-bold text-lg shadow-lg transition-transform active:scale-95"
                 >
                     Play Again
                 </button>
+
+                {/* Dictionary Popup for Correct Words */}
+                {selectedWord && (
+                    <DictionaryPopup
+                        word={selectedWord}
+                        onClose={() => setSelectedWord(null)}
+                    />
+                )}
             </div>
         );
     }
@@ -378,6 +418,9 @@ export function PracticeGame({ words, waniKaniData }: PracticeGameProps) {
                 {/* Mnemonics (only when incorrect) */}
                 {showAnswer && currentWord && (
                     <div className="w-full mt-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        {/* Dictionary Block */}
+                        <DictionaryBlock word={currentWord.dictForm} />
+
                         {getKanjiInfo(currentWord).map(({ char, info }) => (
                             <div key={char} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
                                 <div className="flex items-center gap-4 mb-4">
