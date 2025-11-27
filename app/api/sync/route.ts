@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import fs from 'fs';
 import path from 'path';
 
@@ -29,12 +30,14 @@ export async function POST(request: Request) {
             });
             await redis.set('wordlist', JSON.stringify(data));
             await redis.quit();
+            revalidatePath('/', 'layout');
             return NextResponse.json({ success: true, message: 'Data synced successfully to Redis' });
         }
 
         // 2. Vercel KV
         if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
             await kv.set('wordlist', data);
+            revalidatePath('/', 'layout');
             return NextResponse.json({ success: true, message: 'Data synced successfully to KV' });
         }
 
@@ -47,6 +50,7 @@ export async function POST(request: Request) {
         const filePath = path.join(dataDir, 'wordlist.json');
         fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 
+        revalidatePath('/', 'layout');
         return NextResponse.json({ success: true, message: 'Data synced successfully to FS' });
     } catch (error) {
         console.error('Error syncing data:', error);
