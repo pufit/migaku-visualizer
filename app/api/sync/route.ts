@@ -5,6 +5,29 @@ import path from 'path';
 
 import { kv } from '@vercel/kv';
 import Redis from 'ioredis';
+import type { Word, WordListData } from '@/lib/data';
+
+// Create a unique key for a word
+function wordKey(word: Word): string {
+    return `${word.dictForm}|${word.language}`;
+}
+
+// Merge incoming words with existing, preserving createdAt
+function mergeWordLists(existing: Word[], incoming: Word[]): Word[] {
+    const existingMap = new Map<string, Word>();
+    for (const word of existing) {
+        existingMap.set(wordKey(word), word);
+    }
+
+    return incoming.map(word => {
+        const existingWord = existingMap.get(wordKey(word));
+        return {
+            ...word,
+            // Preserve existing createdAt if present
+            createdAt: existingWord?.createdAt ?? word.createdAt,
+        };
+    });
+}
 
 export async function POST(request: Request) {
     try {
@@ -16,7 +39,8 @@ export async function POST(request: Request) {
             );
         }
 
-        const data = await request.json();
+        const data: WordListData = await request.json();
+        const incomingWords = data.words || [];
 
         // 1. Generic Redis
         if (process.env.REDIS_URL) {
@@ -28,7 +52,18 @@ export async function POST(request: Request) {
                 password: url.password,
                 tls: url.protocol === 'rediss:' ? {} : undefined,
             });
-            await redis.set('wordlist', JSON.stringify(data));
+
+            // Fetch existing data to preserve createdAt
+            const existingData = await redis.get('wordlist');
+            let existingWords: Word[] = [];
+            if (existingData) {
+                const parsed = typeof existingData === 'string' ? JSON.parse(existingData) : existingData;
+                existingWords = Array.isArray(parsed) ? parsed : parsed.words || [];
+            }
+
+            // Merge to preserve createdAt
+            const mergedWords = mergeWordLists(existingWords, incomingWords);
+            await redis.set('wordlist', JSON.stringify({ words: mergedWords }));
             await redis.quit();
             revalidatePath('/', 'layout');
             return NextResponse.json({ success: true, message: 'Data synced successfully to Redis' });
@@ -36,7 +71,15 @@ export async function POST(request: Request) {
 
         // 2. Vercel KV
         if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-            await kv.set('wordlist', data);
+            // Fetch existing data to preserve createdAt
+            const existingData = await kv.get<WordListData | Word[]>('wordlist');
+            let existingWords: Word[] = [];
+            if (existingData) {
+                existingWords = Array.isArray(existingData) ? existingData : existingData.words || [];
+            }
+
+            const mergedWords = mergeWordLists(existingWords, incomingWords);
+            await kv.set('wordlist', { words: mergedWords });
             revalidatePath('/', 'layout');
             return NextResponse.json({ success: true, message: 'Data synced successfully to KV' });
         }
@@ -48,7 +91,17 @@ export async function POST(request: Request) {
         }
 
         const filePath = path.join(dataDir, 'wordlist.json');
-        fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+
+        // Fetch existing data to preserve createdAt
+        let existingWords: Word[] = [];
+        if (fs.existsSync(filePath)) {
+            const existingContent = fs.readFileSync(filePath, 'utf-8');
+            const parsed = JSON.parse(existingContent);
+            existingWords = Array.isArray(parsed) ? parsed : parsed.words || [];
+        }
+
+        const mergedWords = mergeWordLists(existingWords, incomingWords);
+        fs.writeFileSync(filePath, JSON.stringify({ words: mergedWords }, null, 2));
 
         revalidatePath('/', 'layout');
         return NextResponse.json({ success: true, message: 'Data synced successfully to FS' });

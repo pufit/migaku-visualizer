@@ -10,6 +10,7 @@ export interface Word {
     hasCard: number;
     tracked: number;
     mod: number;
+    createdAt: number; // Timestamp when word was first added (preserved across syncs)
 }
 
 export interface WordListData {
